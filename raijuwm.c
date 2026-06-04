@@ -13,6 +13,7 @@ typedef struct Client Client;
 struct Client {
     Window win;
     int workspace;
+    int hidden;
     Client *next;
 };
 
@@ -58,6 +59,7 @@ void add_client(Window w) {
     Client *c = calloc(1, sizeof(Client));
     c->win = w;
     c->workspace = current_workspace;
+    c->hidden = 0;
     c->next = clients;
     clients = c;
 }
@@ -124,8 +126,10 @@ void switch_workspace(int ws) {
     for (Client *c = clients; c; c = c->next) {
         if (c->workspace == current_workspace) {
             XMapWindow(dpy, c->win);
+            c->hidden = 0;
         } else {
             XUnmapWindow(dpy, c->win);
+            c->hidden = 1;
         }
     }
     XSync(dpy, False);
@@ -514,6 +518,8 @@ int main(int argc, char **argv) {
         case UnmapNotify: {
             if (suppress_unmap_notify) break;
             XUnmapEvent *e = &ev.xunmap;
+            Client *c = client_by_window(e->window);
+            if (c && c->hidden) break;
             remove_client(e->window);
             set_focused(clients ? clients->win : 0);
             arrange();
