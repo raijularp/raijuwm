@@ -19,6 +19,17 @@ static const char *dmenucmd[] = { "dmenu_run", NULL };
 #define KEY_DMENU   XK_p
 /* Alt+Space -> cycle layouts (master-stack, monocle) */
 #define KEY_LAYOUT  XK_space
+/* Alt+Down -> focus next window in current workspace */
+#define KEY_FOCUS_NEXT XK_Down
+/* Alt+Up -> focus previous window in current workspace */
+#define KEY_FOCUS_PREV XK_Up
+/* Alt+Right -> next workspace */
+#define KEY_WS_NEXT XK_Right
+/* Alt+Left -> previous workspace */
+#define KEY_WS_PREV XK_Left
+
+/* number of workspaces */
+static const int workspace_count = 4;
 
 /* master area factor (0.0 - 1.0) for master-stack layout */
 static const float mfactor = 0.6f;

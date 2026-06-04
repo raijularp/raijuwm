@@ -39,6 +39,8 @@ Controls
 - Alt+q — kill focused window
 - Alt+p — start `dmenu_run`
 - Alt+Space — cycle layouts (master-stack, monocle)
+- Alt+Up / Alt+Down — focus previous/next window in the current workspace
+- Alt+Left / Alt+Right — switch to the previous/next workspace
 - Multi-monitor support via Xinerama (windows are distributed per screen)
 
 Styling

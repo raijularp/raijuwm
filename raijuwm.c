@@ -11,12 +11,15 @@
 typedef struct Client Client;
 struct Client {
     Window win;
+    int workspace;
     Client *next;
 };
 
 static Display *dpy;
 static int screen;
 static Window root;
+static int current_workspace = 0;
+static int suppress_unmap_notify = 0;
 static Client *clients = NULL;
 static Window focused = 0;
 static unsigned long colpixel_focus = 0;
@@ -50,8 +53,89 @@ void die(const char *msg) {
 void add_client(Window w) {
     Client *c = calloc(1, sizeof(Client));
     c->win = w;
+    c->workspace = current_workspace;
     c->next = clients;
     clients = c;
+}
+
+Client *client_by_window(Window w) {
+    for (Client *c = clients; c; c = c->next) {
+        if (c->win == w) return c;
+    }
+    return NULL;
+}
+
+int count_workspace_clients(int ws) {
+    int n = 0;
+    for (Client *c = clients; c; c = c->next) {
+        if (c->workspace == ws) n++;
+    }
+    return n;
+}
+
+Client *first_client_in_workspace(int ws) {
+    for (Client *c = clients; c; c = c->next) {
+        if (c->workspace == ws) return c;
+    }
+    return NULL;
+}
+
+Client *next_client_in_workspace(Client *c, int ws) {
+    for (Client *n = c ? c->next : NULL; n; n = n->next) {
+        if (n->workspace == ws) return n;
+    }
+    return NULL;
+}
+
+void focus_next_client(int dir) {
+    int cnt = count_workspace_clients(current_workspace);
+    if (cnt == 0) return;
+
+    Client **list = calloc(cnt, sizeof(Client *));
+    int i = 0;
+    int current_index = 0;
+    for (Client *c = clients; c; c = c->next) {
+        if (c->workspace == current_workspace) {
+            list[i] = c;
+            if (c->win == focused) current_index = i;
+            i++;
+        }
+    }
+
+    int next_index = (cnt + current_index + (dir > 0 ? 1 : -1)) % cnt;
+    Client *next = list[next_index];
+    free(list);
+
+    if (next) {
+        set_focused(next->win);
+        XSetInputFocus(dpy, next->win, RevertToPointerRoot, CurrentTime);
+    }
+}
+
+void switch_workspace(int ws) {
+    if (ws < 0 || ws >= workspace_count || ws == current_workspace) return;
+    current_workspace = ws;
+
+    suppress_unmap_notify = 1;
+    for (Client *c = clients; c; c = c->next) {
+        if (c->workspace == current_workspace) {
+            XMapWindow(dpy, c->win);
+        } else {
+            XUnmapWindow(dpy, c->win);
+        }
+    }
+    XSync(dpy, False);
+    suppress_unmap_notify = 0;
+
+    Client *first = first_client_in_workspace(current_workspace);
+    if (first) {
+        set_focused(first->win);
+        XSetInputFocus(dpy, first->win, RevertToPointerRoot, CurrentTime);
+    } else {
+        set_focused(0);
+    }
+
+    arrange();
 }
 
 void remove_client(Window w) {
@@ -74,7 +158,7 @@ int count_clients() {
 }
 
 void arrange() {
-    int n = count_clients();
+    int n = count_workspace_clients(current_workspace);
     if (n == 0) return;
 
     /* refresh screen info each arrange to handle hotplug */
@@ -91,7 +175,13 @@ void arrange() {
     int total = n;
     int per = total / xinerama_n;
     int rem = total % xinerama_n;
-    Client *cur = clients;
+    Client *cur = NULL;
+    for (Client *c = clients; c; c = c->next) {
+        if (c->workspace == current_workspace) {
+            cur = c;
+            break;
+        }
+    }
     for (int si = 0; si < xinerama_n && cur; si++) {
         int this_count = per + (si < rem ? 1 : 0);
         int sw, sh, sx, sy;
@@ -118,7 +208,7 @@ void arrange() {
             int x = sx + gap_outer, y = sy + gap_outer;
             int w = sw - 2 * gap_outer;
             int h = sh - 2 * gap_outer;
-            for (int k = 0; k < this_count && cur; k++, cur = cur->next) {
+            for (int k = 0; k < this_count && cur; k++, cur = next_client_in_workspace(cur, current_workspace)) {
                 XMoveResizeWindow(dpy, cur->win, x, y, w, h);
             }
             continue;
@@ -132,12 +222,12 @@ void arrange() {
 
         if (cur) {
             XMoveResizeWindow(dpy, cur->win, sx + gap_outer, sy + gap_outer, master_w, usable_h);
-            cur = cur->next;
+            cur = next_client_in_workspace(cur, current_workspace);
         }
 
         int stack_n = this_count - 1;
         int y = sy + gap_outer;
-        for (int k = 0; k < stack_n && cur; k++, cur = cur->next) {
+        for (int k = 0; k < stack_n && cur; k++, cur = next_client_in_workspace(cur, current_workspace)) {
             int h = (stack_n > 0) ? (usable_h / stack_n) : usable_h;
             XMoveResizeWindow(dpy, cur->win, sx + gap_outer + master_w + gap_inner, y, stack_w - gap_inner, h - gap_inner);
             y += h;
@@ -240,10 +330,18 @@ int main(int argc, char **argv) {
     KeyCode kc_term = XKeysymToKeycode(dpy, KEY_TERMINAL);
     KeyCode kc_dmenu = XKeysymToKeycode(dpy, KEY_DMENU);
     KeyCode kc_layout = XKeysymToKeycode(dpy, KEY_LAYOUT);
+    KeyCode kc_focus_next = XKeysymToKeycode(dpy, KEY_FOCUS_NEXT);
+    KeyCode kc_focus_prev = XKeysymToKeycode(dpy, KEY_FOCUS_PREV);
+    KeyCode kc_ws_next = XKeysymToKeycode(dpy, KEY_WS_NEXT);
+    KeyCode kc_ws_prev = XKeysymToKeycode(dpy, KEY_WS_PREV);
     XGrabKey(dpy, kc_kill, MOD, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, kc_term, MOD, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, kc_dmenu, MOD, root, True, GrabModeAsync, GrabModeAsync);
     XGrabKey(dpy, kc_layout, MOD, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, kc_focus_next, MOD, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, kc_focus_prev, MOD, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, kc_ws_next, MOD, root, True, GrabModeAsync, GrabModeAsync);
+    XGrabKey(dpy, kc_ws_prev, MOD, root, True, GrabModeAsync, GrabModeAsync);
 
     /* grab mouse buttons for moving/resizing (Mod + Button1/Button3) */
     XGrabButton(dpy, Button1, MOD, root, True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
@@ -368,11 +466,22 @@ int main(int argc, char **argv) {
             XKeyEvent *e = &ev.xkey;
             KeySym ks = XKeycodeToKeysym(dpy, e->keycode, 0);
             if ((e->state & MOD) && ks == KEY_KILL) {
-                Window fok; int revert;
-                XGetInputFocus(dpy, &fok, &revert);
+                Window fok = focused;
+                if (fok == None || fok == root) {
+                    if (clients) fok = clients->win;
+                }
                 if (fok != None && fok != root) {
                     XKillClient(dpy, fok);
                     remove_client(fok);
+                    if (clients) {
+                        Client *next = first_client_in_workspace(current_workspace);
+                        if (next) {
+                            set_focused(next->win);
+                            XSetInputFocus(dpy, next->win, RevertToPointerRoot, CurrentTime);
+                        }
+                    } else {
+                        set_focused(0);
+                    }
                     arrange();
                 }
             }
@@ -385,8 +494,21 @@ int main(int argc, char **argv) {
             if ((e->state & MOD) && ks == KEY_DMENU) {
                 spawn(dmenucmd);
             }
+            if ((e->state & MOD) && ks == KEY_FOCUS_NEXT) {
+                focus_next_client(1);
+            }
+            if ((e->state & MOD) && ks == KEY_FOCUS_PREV) {
+                focus_next_client(-1);
+            }
+            if ((e->state & MOD) && ks == KEY_WS_NEXT) {
+                switch_workspace((current_workspace + 1) % workspace_count);
+            }
+            if ((e->state & MOD) && ks == KEY_WS_PREV) {
+                switch_workspace((current_workspace - 1 + workspace_count) % workspace_count);
+            }
         } break;
         case UnmapNotify: {
+            if (suppress_unmap_notify) break;
             XUnmapEvent *e = &ev.xunmap;
             remove_client(e->window);
             set_focused(clients ? clients->win : 0);
