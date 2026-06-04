@@ -51,6 +51,9 @@ void die(const char *msg) {
     exit(1);
 }
 
+void arrange(void);
+void set_focused(Window w);
+
 void add_client(Window w) {
     Client *c = calloc(1, sizeof(Client));
     c->win = w;
