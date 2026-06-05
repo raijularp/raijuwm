@@ -21,6 +21,7 @@ The repository includes a helper script:
 cd raijuwm
 make
 ./run.sh
+(This isnt the recommend way to start raijuwm, just put exec raijuwm in your .xinitrc file :D) 
 ```
 
 If you want to run manually:
