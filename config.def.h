@@ -30,6 +30,8 @@ static const char *dmenucmd[] = { "dmenu_run", NULL };
 
 /* number of workspaces */
 static const int workspace_count = 4;
+/* whether to spawn the built-in bar */
+static const int use_bar = 1;
 
 /* master area factor (0.0 - 1.0) for master-stack layout */
 static const float mfactor = 0.6f;

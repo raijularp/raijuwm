@@ -277,6 +277,8 @@ void manage(Window w) {
 
 void spawn(const char *const cmd[]) {
     if (fork() == 0) {
+        const char *home = getenv("HOME");
+        if (home) chdir(home);
         setsid();
         execvp(cmd[0], (char *const *)cmd);
         _exit(0);
@@ -355,8 +357,10 @@ int main(int argc, char **argv) {
     XGrabButton(dpy, Button1, MOD, root, True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     XGrabButton(dpy, Button3, MOD, root, True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 
-    /* spawn the status bar */
-    spawn((const char *const[]){"./bar", NULL});
+    /* spawn the status bar if enabled in config */
+    if (use_bar) {
+        spawn((const char *const[]){"./bar", NULL});
+    }
 
     /* setup SIGHUP handler for restart */
     g_argv = argv;

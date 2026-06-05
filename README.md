@@ -34,6 +34,20 @@ DISPLAY=:1 ./raijuwm &
 DISPLAY=:1 ./bar &
 ```
 
+If you disable the built-in bar in `config.h` with `use_bar = 0`, start your own bar instead:
+
+```sh
+DISPLAY=:1 ./raijuwm &
+DISPLAY=:1 ./your-bar &
+```
+
+There is also an `autostart.sh` helper script in the repo that you can use from `~/.xinitrc`:
+
+```sh
+chmod +x autostart.sh
+~/.config/raijuwm/autostart.sh
+```
+
 Controls
 
 - Alt+Return — spawn default terminal (configurable)
@@ -83,6 +97,7 @@ The default config includes:
 - `MOD` — modifier mask (default: Alt / `Mod1Mask`)
 - `termcmd` — default terminal command
 - `dmenucmd` — command used to run dmenu
+- `use_bar` — set to `0` to disable the built-in bar if you want to use your own panel
 - `mfactor` — master area factor for the master-stack layout
 - `force_native_display` — set to `1` to use a fixed 1920x1080 screen, or `0` to honor actual display geometry
 - `native_screen_width` / `native_screen_height` — the forced display resolution
